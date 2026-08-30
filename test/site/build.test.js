@@ -167,16 +167,15 @@ describe("build", () => {
   it("renderAll 构建完整站点", async () => {
     const articles = await renderAll({ cwd: siteRoot });
 
-    // 文章收集：poisson + proj-a（草稿被跳过），首页 home 也是文章
-    expect(articles.length).toBe(3);
+    // 自动发现 articles/ 下的文章（poisson），草稿 draft-post 跳过；
+    // home 首页独立生成（不算文章），projects 不再收集
+    expect(articles.length).toBe(1);
     expect(articles.some((a) => a.slug === "poisson")).toBe(true);
-    expect(articles.some((a) => a.slug === "proj-a")).toBe(true);
     expect(articles.some((a) => a.slug === "draft-post")).toBe(false);
 
     // 输出文件存在
     const poissonHtml = path.join(articlesDir, "poisson", "index.html");
     expect(await fs.pathExists(poissonHtml)).toBe(true);
-    expect(await fs.pathExists(path.join(projectsDir, "proj-a", "index.html"))).toBe(true);
     expect(await fs.pathExists(path.join(siteRoot, "index.html"))).toBe(true);
 
     // 文章 HTML：公式零泄漏 + KaTeX 渲染 + 代码块修复
@@ -187,28 +186,15 @@ describe("build", () => {
     expect(articleHtml).toContain('class="hljs language-cpp"');
     expect(articleHtml).not.toContain('data-role="codeBlock"');
 
-    // 文章页有返回按钮
+    // 文章页有返回按钮（指向博客首页，无分类导航）
     expect(articleHtml).toContain("back-button");
-    expect(articleHtml).toContain("返回技术文章");
 
-    // 首页：占位符被替换
+    // 首页：占位符被替换，含最新文章与完整列表
     const homeHtml = await fs.readFile(path.join(siteRoot, "index.html"), "utf8");
     expect(homeHtml).toContain("泊松重建");
-    expect(homeHtml).toContain("项目A");
     expect(homeHtml).not.toContain("latest-articles-placeholder");
+    expect(homeHtml).not.toContain("all-articles-placeholder");
     expect(homeHtml).not.toContain("open-source-projects-placeholder");
-
-    // 分类索引页
-    const articlesIndex = await fs.readFile(
-      path.join(articlesDir, "index.html"),
-      "utf8"
-    );
-    expect(articlesIndex).toContain("<h1>技术文章</h1>");
-    expect(articlesIndex).toContain("泊松重建");
-    expect(articlesIndex).not.toContain("草稿文章");
-
-    // 导航激活态：文章页激活"技术文章"
-    expect(articleHtml).toContain('class="active"');
   });
 
   it("processMarkdownFile 单独渲染单篇文章", async () => {
@@ -297,22 +283,16 @@ describe("build", () => {
     expect(html).toContain("泊松重建");
   });
 
-  it("generateIndexPage 首页无文章时跳过", async () => {
+  it("generateIndexPage 首页源文件不存在时跳过", async () => {
+    await fs.remove(path.join(homeDir, "home", "index.md"));
     await generateIndexPage("home", [], [], ctx);
     expect(await fs.pathExists(path.join(homeDir, "index.html"))).toBe(false);
   });
 
-  it("generateIndexPage 首页文章缺失时抛错", async () => {
-    await fs.remove(path.join(homeDir, "home", "index.md"));
-    const articles = [
-      {
-        title: "首页",
-        folder: "home",
-        slug: "home",
-        articlePath: path.join(homeDir, "home", "index.md"),
-      },
-    ];
-    await expect(generateIndexPage("home", articles, [], ctx)).rejects.toThrow();
+  it("generateIndexPage 首页源文件存在时正常生成", async () => {
+    await generateIndexPage("home", [], [], ctx);
+    expect(await fs.pathExists(path.join(homeDir, "index.html"))).toBe(true);
+    expect(await fs.pathExists(path.join(siteRoot, "index.html"))).toBe(true);
   });
 
   it("generateIndexPage 首页 main 提取失败时静默跳过", async () => {
@@ -422,8 +402,8 @@ describe("build", () => {
   it("renderAll config.yml 缺失时使用默认配置", async () => {
     await fs.remove(path.join(siteRoot, "config.yml"));
     const articles = await renderAll({ cwd: siteRoot });
-    // 默认导航 4 项：home/articles/blog/projects
-    expect(articles.length).toBeGreaterThan(0);
+    // 默认配置下仍自动发现 articles/ 目录
+    expect(articles.some((a) => a.slug === "poisson")).toBe(true);
   });
 
   it("renderAll 默认参数使用 process.cwd() 作为站点根目录", async () => {
@@ -432,7 +412,7 @@ describe("build", () => {
     process.chdir(siteRoot);
     try {
       const articles = await renderAll();
-      expect(articles.length).toBeGreaterThan(0);
+      expect(articles.some((a) => a.slug === "poisson")).toBe(true);
     } finally {
       process.chdir(cwd);
     }
@@ -485,22 +465,19 @@ navigation:
   });
 
   it("renderAll 文章处理失败时记录错误不中断整体构建", async () => {
-    // 让第一篇文章（home）渲染失败，其余文章正常构建
+    // 让第一篇文章（poisson）渲染失败，其余文章正常构建
     const spy = vi.spyOn(rendererCjs, "renderMarkdown");
     spy.mockRejectedValueOnce(new Error("模拟渲染失败"));
     const articles = await renderAll({ cwd: siteRoot });
     expect(Array.isArray(articles)).toBe(true);
-    // home 失败被记录，poisson 与 proj-a 仍成功
-    expect(articles.some((a) => a.slug === "poisson")).toBe(true);
-    expect(articles.some((a) => a.slug === "proj-a")).toBe(true);
-    expect(articles.some((a) => a.slug === "home")).toBe(false);
+    // poisson 失败被记录跳过，返回空列表（articles/ 下仅 poisson 一篇）
+    expect(articles.some((a) => a.slug === "poisson")).toBe(false);
   });
 
   it("renderAll 中配置缺失 navigation 时用默认", async () => {
     await fs.writeFile(path.join(siteRoot, "config.yml"), "site:\n  title: 无导航\n");
     const articles = await renderAll({ cwd: siteRoot });
-    // 无 navigation → 不生成导航页，但默认 articleDirs=["articles"] 仍收集文章
-    expect(articles.length).toBeGreaterThan(0);
+    // 无 navigation 时仍自动发现 articles/ 目录
     expect(articles.some((a) => a.slug === "poisson")).toBe(true);
   });
 

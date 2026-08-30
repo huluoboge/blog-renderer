@@ -172,19 +172,21 @@ async function generateIndexPage(folder, articles, allArticles, ctx) {
   const navItem = navItems.find((item) => item.folder === folder);
 
   if (navItem.isHome) {
-    if (articles.length === 0) {
-      console.log("首页没有找到文章，跳过主页生成");
+    // 首页独立生成：直接渲染 <folder>/home/index.md（约定 home/home/index.md），
+    // 不依赖文章清单。文件不存在则跳过。
+    const homeMdPath = path.join(cwd, folder, "home", "index.md");
+    if (!(await fs.pathExists(homeMdPath))) {
+      console.log("首页源文件不存在，跳过主页生成");
       return;
     }
-
-    // 处理首页文章（应该只有一个）
-    const homeArticle = articles[0];
-    await processMarkdownFile(homeArticle.articlePath, ctx);
+    await processMarkdownFile(homeMdPath, ctx);
 
     // 读取生成的 HTML 内容（注意输出目录可能不同于源目录）
     const homeHtmlPath = path.join(
       ctx.outputDir || cwd,
-      path.relative(cwd, homeArticle.articlePath).replace(/\.md$/, ".html")
+      folder,
+      "home",
+      "index.html"
     );
     const indexContent = await fs.readFile(homeHtmlPath, "utf8");
 
@@ -193,9 +195,9 @@ async function generateIndexPage(folder, articles, allArticles, ctx) {
     if (mainContent) {
       // 修复相对路径链接
       let updated = mainContent.replace(/file:\/\/\/\//g, "./");
-      updated = updated.replace(/file:\/\/\//g, "./");
+      updated = updated.replace(/file:\/\//g, "./");
 
-      // 替换主页占位符（最新文章、开源项目）
+      // 替换主页占位符（最近文章、全部文章、开源项目）
       const content = buildHomepageContent(
         updated,
         allArticles,
@@ -297,23 +299,18 @@ async function renderAll(options = {}) {
     const allArticles = [];
     const ctx = { cwd, outputDir, navItems, config, engineConfig, basePath, templateHtml };
 
-    // 第一步：收集所有文章信息。
-    // 扫描目录 = 导航 folder 集合 + config.articleDirs（默认 ["articles"]，支持未在导航中的文章目录）
-    const navFolders = navItems.map((item) => item.folder);
-    const extraDirs = config.articleDirs || ["articles"];
-    const scanFolders = [...new Set([...navFolders, ...extraDirs])];
-
-    for (const folder of scanFolders) {
+    // 第一步：自动发现文章。扫描站点根下所有一级目录（约定：articles/ 存文章），
+    // 渲染每个子目录的 index.md；front-matter 标 draft: true 的跳过。
+    // 简单约定：不配置，不额外扫描，不分类页。
+    const scanDirs = ["articles"];
+    for (const folder of scanDirs) {
       const folderPath = path.join(cwd, folder);
       const discovered = await discoverArticles(folderPath);
-      console.log(
-        `收集文件夹 ${folder}: 找到 ${discovered.length} 篇文章`
-      );
+      console.log(`收集文件夹 ${folder}: 找到 ${discovered.length} 篇文章`);
 
       for (const articleInfo of discovered) {
         try {
           const meta = await processMarkdownFile(articleInfo.path, ctx);
-          // processMarkdownFile 成功必返回对象（失败抛错被捕获）
           allArticles.push({
             ...meta,
             slug: articleInfo.slug,
@@ -322,6 +319,7 @@ async function renderAll(options = {}) {
             articlePath: articleInfo.path,
             articleFolder: articleInfo.folder,
           });
+          console.log(`收集文章: ${articleInfo.slug}`);
         } catch (error) {
           console.error(`处理文章 ${articleInfo.slug} 失败:`, error);
         }
@@ -340,7 +338,8 @@ async function renderAll(options = {}) {
         `生成文件夹 ${folderPath} 的页面: ${articles.length} 篇文章`
       );
 
-      if (articles.length > 0) {
+      // 首页（isHome）独立生成，不受文章数影响；普通分类需有文章才生成
+      if (navItem.isHome || articles.length > 0) {
         await generateIndexPage(folderPath, articles, allArticles, ctx);
       }
     }
