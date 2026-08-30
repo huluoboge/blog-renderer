@@ -64,6 +64,23 @@ describe("index-pages", () => {
     it("空 main 返回 null", () => {
       expect(extractMainContent("<main></main>")).toBeNull();
     });
+
+    it("带属性的 main 标签也能提取", () => {
+      const html = '<html><main class="content"><h1>标题</h1></main></html>';
+      expect(extractMainContent(html)).toBe("<h1>标题</h1>");
+    });
+
+    it("外部模板 .blog-content 容器优先提取（避免嵌套）", () => {
+      const html =
+        '<main class="content"><div class="blog-content"><h1>正文</h1></div></main>';
+      expect(extractMainContent(html)).toBe("<h1>正文</h1>");
+    });
+
+    it("无 .blog-content 时回退 main 提取", () => {
+      const html =
+        '<main class="content"><h1>直接内容</h1></main>';
+      expect(extractMainContent(html)).toBe("<h1>直接内容</h1>");
+    });
   });
 
   describe("buildLatestArticlesHTML", () => {

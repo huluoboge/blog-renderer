@@ -11,7 +11,10 @@
  * @returns {string|null} main 内容，找不到返回 null
  */
 function extractMainContent(html) {
-  const match = html.match(/<main>([\s\S]*?)<\/main>/);
+  // 优先提取内容容器（外部模板常见 .blog-content），否则取 main 内部
+  const contentMatch = html.match(/<div class="blog-content"[^>]*>([\s\S]*?)<\/div>\s*<\/main>/);
+  if (contentMatch && contentMatch[1]) return contentMatch[1];
+  const match = html.match(/<main[^>]*>([\s\S]*?)<\/main>/);
   return match && match[1] ? match[1] : null;
 }
 
