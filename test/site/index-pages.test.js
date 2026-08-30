@@ -3,7 +3,8 @@ import { extractMainContent,
   buildLatestArticlesHTML,
   buildProjectsHTML,
   buildHomepageContent,
-  buildIndexContent, } from "../../src/site/index-pages.js";
+  buildIndexContent,
+  formatDate, } from "../../src/site/index-pages.js";
 
 const ALL_ARTICLES = [
   {
@@ -80,6 +81,30 @@ describe("index-pages", () => {
       const html =
         '<main class="content"><h1>直接内容</h1></main>';
       expect(extractMainContent(html)).toBe("<h1>直接内容</h1>");
+    });
+  });
+
+  describe("formatDate", () => {
+    it("字符串日期保持不变", () => {
+      expect(formatDate("2024-06-15")).toBe("2024-06-15");
+    });
+
+    it("Date 对象格式化为 YYYY-MM-DD", () => {
+      expect(formatDate(new Date(2024, 5, 15))).toBe("2024-06-15");
+    });
+
+    it("空值返回空字符串", () => {
+      expect(formatDate("")).toBe("");
+      expect(formatDate(null)).toBe("");
+      expect(formatDate(undefined)).toBe("");
+    });
+
+    it("非法日期截断为前 10 字符", () => {
+      expect(formatDate("not-a-date")).toBe("not-a-date");
+    });
+
+    it("ISO 时间戳截断为日期部分", () => {
+      expect(formatDate("2025-10-27T21:32:00+08:00")).toBe("2025-10-27");
     });
   });
 

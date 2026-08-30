@@ -19,6 +19,21 @@ function extractMainContent(html) {
 }
 
 /**
+ * 格式化日期为 YYYY-MM-DD。
+ * front-matter 的 date 经 YAML 解析可能是 Date 对象（toString 长格式）或字符串。
+ */
+function formatDate(raw) {
+  if (!raw) return "";
+  const d = raw instanceof Date ? raw : new Date(raw);
+  if (isNaN(d.getTime())) return String(raw).slice(0, 10);
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+/**
  * 生成最新文章列表 HTML（按日期降序取前 N 篇）
  * @param {Array} allArticles 全部文章（含 date/folder/slug/title）
  * @param {number} count      取多少篇
@@ -118,7 +133,7 @@ function buildIndexContent(articles, navItem) {
           <div class="article-content">
               <h3><a href="${article.slug}/index.html">${article.title}</a></h3>
               <div class="article-meta">
-                  ${article.date ? `发布于: ${article.date}` : ""}
+                  ${article.date ? `发布于: ${formatDate(article.date)}` : ""}
                   ${article.tags ? ` | 标签: ${article.tags.join(", ")}` : ""}
               </div>
               ${article.excerpt ? `<p>${article.excerpt}</p>` : ""}
@@ -142,4 +157,5 @@ module.exports = {
   buildProjectsHTML,
   buildHomepageContent,
   buildIndexContent,
+  formatDate,
 };
