@@ -144,5 +144,17 @@ describe("template", () => {
       const html = renderWithTemplate("{{TITLE}}-{{TITLE}}", { title: "a" });
       expect(html).toBe("a-a");
     });
+
+    it("正文含 $' $& 等 replace 特殊模式时不被截断（回归）", () => {
+      // 代码块常见 r'$\tau$' —— 字符串替换会把 $' 当"匹配后剩余部分"导致截断
+      const content = "plt.xlabel(r'$\\tau$ (s)'); plt.ylabel(r'$\\sigma(\\tau)$')\nplt.grid(True)";
+      const tpl = "<body>{{CONTENT}}</body>";
+      const html = renderWithTemplate(tpl, { content });
+      expect(html).toContain("r'$\\tau$ (s)'");
+      expect(html).toContain("r'$\\sigma(\\tau)$'");
+      expect(html).toContain("plt.grid(True)");
+      expect(html).toContain("<body>");
+      expect(html).toContain("</body>");
+    });
   });
 });

@@ -33,10 +33,12 @@ function escapeHtml(str) {
  * @returns {string}
  */
 function renderWithTemplate(templateHtml, { title = "", content = "", basePath = "" } = {}) {
+  // 注意：必须用函数 replacer，不能用字符串替换！
+  // 字符串替换串中 $' $` $& $1 等是特殊模式——正文含 "$'"（如 Python 的 r'$\tau$'）会被截断破坏。
   return templateHtml
-    .replace(/\{\{\s*TITLE\s*\}\}/g, escapeHtml(title))
-    .replace(/\{\{\s*CONTENT\s*\}\}/g, content)
-    .replace(/\{\{\s*BASE_PATH\s*\}\}/g, basePath);
+    .replace(/\{\{\s*TITLE\s*\}\}/g, () => escapeHtml(title))
+    .replace(/\{\{\s*CONTENT\s*\}\}/g, () => content)
+    .replace(/\{\{\s*BASE_PATH\s*\}\}/g, () => basePath);
 }
 
 /**
