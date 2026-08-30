@@ -55,6 +55,39 @@ function buildLatestArticlesHTML(allArticles, count = 3) {
 }
 
 /**
+ * 生成全部文章列表 HTML（完整列表，与分类索引页同款 article-item 卡片）。
+ * 博客首页占位符 all-articles-placeholder 使用它——首页即完整文章列表。
+ * @param {Array} allArticles 全部文章（含 date/folder/slug/title/tags/excerpt）
+ */
+function buildAllArticlesHTML(allArticles) {
+  const sorted = allArticles
+    .filter((article) => article.folder === "articles")
+    .sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return new Date(b.date) - new Date(a.date);
+    });
+
+  return sorted
+    .map((article) => {
+      return `
+      <div class="article-item">
+          <div class="article-content">
+              <h3><a href="articles/${article.slug}/index.html">${article.title}</a></h3>
+              <div class="article-meta">
+                  ${article.date ? `发布于: ${formatDate(article.date)}` : ""}
+                  ${article.tags ? ` | 标签: ${article.tags.join(", ")}` : ""}
+              </div>
+              ${article.excerpt ? `<p>${article.excerpt}</p>` : ""}
+          </div>
+      </div>
+    `;
+    })
+    .join("\n");
+}
+
+/**
  * 生成开源项目列表 HTML（按日期降序）
  * @param {Array} allArticles 全部文章
  */
@@ -87,6 +120,14 @@ function buildHomepageContent(mainContent, allArticles, homepageCfg = {}) {
     updatedContent = updatedContent.replace(
       '<div id="latest-articles-placeholder"></div>',
       `<ul>${buildLatestArticlesHTML(allArticles, count)}</ul>`
+    );
+  }
+
+  // 博客首页完整文章列表（首页即列表）
+  if (mainContent.includes('<div id="all-articles-placeholder"></div>')) {
+    updatedContent = updatedContent.replace(
+      '<div id="all-articles-placeholder"></div>',
+      `<div class="article-list">${buildAllArticlesHTML(allArticles)}</div>`
     );
   }
 
@@ -154,6 +195,7 @@ function buildIndexContent(articles, navItem) {
 module.exports = {
   extractMainContent,
   buildLatestArticlesHTML,
+  buildAllArticlesHTML,
   buildProjectsHTML,
   buildHomepageContent,
   buildIndexContent,

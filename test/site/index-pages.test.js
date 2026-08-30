@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { extractMainContent,
   buildLatestArticlesHTML,
+  buildAllArticlesHTML,
   buildProjectsHTML,
   buildHomepageContent,
   buildIndexContent,
@@ -20,12 +21,14 @@ const ALL_ARTICLES = [
     folder: "articles",
     slug: "new",
     file: "index.md",
+    tags: ["CV", "SfM"],
   },
   {
     title: "无日期文章",
     folder: "articles",
     slug: "nodate",
     file: "index.md",
+    excerpt: "一篇无日期的文章摘要",
   },
   {
     title: "项目A",
@@ -142,6 +145,66 @@ describe("index-pages", () => {
     });
   });
 
+  describe("buildAllArticlesHTML", () => {
+    it("包含全部 articles 分类文章（不截断）", () => {
+      const html = buildAllArticlesHTML(ALL_ARTICLES);
+      expect(html).toContain("新文章");
+      expect(html).toContain("旧文章");
+      expect(html).toContain("无日期文章");
+    });
+
+    it("排除非 articles 分类", () => {
+      const html = buildAllArticlesHTML(ALL_ARTICLES);
+      expect(html).not.toContain("项目A");
+      expect(html).not.toContain("博客贴");
+    });
+
+    it("按日期降序排列", () => {
+      const html = buildAllArticlesHTML(ALL_ARTICLES);
+      expect(html.indexOf("新文章")).toBeLessThan(html.indexOf("旧文章"));
+    });
+
+    it("卡片含标题链接/日期/标签/摘要", () => {
+      const html = buildAllArticlesHTML(ALL_ARTICLES);
+      expect(html).toContain('class="article-item"');
+      expect(html).toContain('href="articles/new/index.html"');
+      expect(html).toContain("发布于: 2024-06-15");
+      expect(html).toContain("标签:");
+    });
+
+    it("空列表返回空字符串", () => {
+      expect(buildAllArticlesHTML([])).toBe("");
+    });
+
+    it("excerpt 显示在卡片中", () => {
+      const html = buildAllArticlesHTML(ALL_ARTICLES);
+      expect(html).toContain("一篇无日期的文章摘要");
+    });
+
+    it("无日期文章排最后", () => {
+      const html = buildAllArticlesHTML(ALL_ARTICLES);
+      expect(html.indexOf("无日期文章")).toBeGreaterThan(html.indexOf("旧文章"));
+    });
+
+    it("全部无日期时保持相对顺序", () => {
+      const noDate = [
+        { title: "A", folder: "articles", slug: "a", file: "index.md" },
+        { title: "B", folder: "articles", slug: "b", file: "index.md" },
+      ];
+      const html = buildAllArticlesHTML(noDate);
+      expect(html.indexOf("A")).toBeLessThan(html.indexOf("B"));
+    });
+
+    it("有日期文章排无日期文章之前", () => {
+      const mixed = [
+        { title: "无日期", folder: "articles", slug: "nd", file: "index.md" },
+        { title: "有日期", date: "2024-01-01", folder: "articles", slug: "d", file: "index.md" },
+      ];
+      const html = buildAllArticlesHTML(mixed);
+      expect(html.indexOf("有日期")).toBeLessThan(html.indexOf("无日期"));
+    });
+  });
+
   describe("buildProjectsHTML", () => {
     it("只包含 projects 分类，按日期降序", () => {
       const html = buildProjectsHTML(ALL_ARTICLES);
@@ -201,6 +264,20 @@ describe("index-pages", () => {
       const html = buildHomepageContent(HOMEPAGE, ALL_ARTICLES);
       expect(html).toContain("新文章");
       expect(html).toContain("项目A");
+    });
+
+    it("all-articles-placeholder 替换为完整文章列表", () => {
+      const html = buildHomepageContent(
+        '<div id="all-articles-placeholder"></div>',
+        ALL_ARTICLES,
+        {}
+      );
+      expect(html).toContain('class="article-list"');
+      expect(html).toContain("新文章");
+      expect(html).toContain("旧文章");
+      expect(html).toContain("无日期文章"); // 不截断
+      expect(html).not.toContain("all-articles-placeholder");
+      expect(html).not.toContain("项目A"); // 排除非 articles
     });
   });
 
