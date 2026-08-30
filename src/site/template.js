@@ -23,6 +23,23 @@ function escapeHtml(str) {
 }
 
 /**
+ * 用外部模板渲染完整页面（渲染器只提供内容，外壳由站点模板决定）。
+ * 模板中可用的占位符：
+ *   {{TITLE}}    页面标题（自动 HTML 转义）
+ *   {{CONTENT}}  渲染后的正文 HTML（原样插入）
+ *   {{BASE_PATH}}站点部署前缀（如 /blog）
+ * @param {string} templateHtml 外部模板全文
+ * @param {object} vars         { title, content, basePath }
+ * @returns {string}
+ */
+function renderWithTemplate(templateHtml, { title = "", content = "", basePath = "" } = {}) {
+  return templateHtml
+    .replace(/\{\{\s*TITLE\s*\}\}/g, escapeHtml(title))
+    .replace(/\{\{\s*CONTENT\s*\}\}/g, content)
+    .replace(/\{\{\s*BASE_PATH\s*\}\}/g, basePath);
+}
+
+/**
  * 生成完整 HTML 页面
  * @param {object} opts
  * @param {string} opts.title        页面标题
@@ -106,4 +123,4 @@ function generateHTML({
 </html>`;
 }
 
-module.exports = { generateHTML, escapeHtml };
+module.exports = { generateHTML, escapeHtml, renderWithTemplate };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateHTML } from "../../src/site/template.js";
+import { generateHTML, renderWithTemplate } from "../../src/site/template.js";
 
 const NAV_ITEMS = [
   { name: "首页", path: "/", folder: "home", isHome: true },
@@ -106,5 +106,43 @@ describe("template", () => {
       staticPrefix: "/custom",
     });
     expect(html).toContain('href="/custom/css/katex.min.css"');
+  });
+
+  describe("renderWithTemplate（外部模板：渲染器只提供内容）", () => {
+    it("替换 TITLE/CONTENT/BASE_PATH 占位符", () => {
+      const tpl = "<html><title>{{TITLE}}</title><body>{{CONTENT}}|{{BASE_PATH}}</body></html>";
+      const html = renderWithTemplate(tpl, {
+        title: "测试页",
+        content: "<h1>正文</h1>",
+        basePath: "/blog",
+      });
+      expect(html).toContain("<title>测试页</title>");
+      expect(html).toContain("<h1>正文</h1>");
+      expect(html).toContain("|/blog");
+      expect(html).not.toContain("{{TITLE}}");
+    });
+
+    it("title 自动 HTML 转义防 XSS", () => {
+      const html = renderWithTemplate("<title>{{TITLE}}</title>", {
+        title: '<script>alert(1)</script>',
+      });
+      expect(html).not.toContain("<script>alert(1)</script>");
+      expect(html).toContain("&lt;script&gt;");
+    });
+
+    it("默认参数（空 vars）也能渲染", () => {
+      const html = renderWithTemplate("{{TITLE}}|{{CONTENT}}|{{BASE_PATH}}");
+      expect(html).toBe("||");
+    });
+
+    it("占位符带空格也能匹配", () => {
+      const html = renderWithTemplate("{{ TITLE }}", { title: "x" });
+      expect(html).toBe("x");
+    });
+
+    it("多个相同占位符全部替换", () => {
+      const html = renderWithTemplate("{{TITLE}}-{{TITLE}}", { title: "a" });
+      expect(html).toBe("a-a");
+    });
   });
 });

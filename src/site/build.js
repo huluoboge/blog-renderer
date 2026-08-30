@@ -12,7 +12,7 @@ const frontMatter = require("front-matter");
 
 const renderer = require("../core/renderer");
 const { processLinksAndEmbeds } = require("../core/links");
-const { generateHTML } = require("./template");
+const { generateHTML, renderWithTemplate } = require("./template");
 const { loadConfig } = require("./config");
 const { discoverArticles } = require("./discover");
 const {
@@ -31,6 +31,29 @@ function relativePagePath(outputPath, cwd) {
     "/" +
     path.relative(cwd, path.dirname(outputPath)).replace(/\\/g, "/");
   return relativePath === "/." ? "/" : relativePath;
+}
+
+/**
+ * 渲染完整页面：配置了外部模板（templateFile）时用外部模板（渲染器只提供内容），
+ * 否则用内置站点模板。
+ * @param {object} ctx  { templateHtml, basePath, navItems, currentPath }
+ * @param {object} vars { title, content, currentPath }
+ */
+function renderPage(ctx, { title, content, currentPath }) {
+  if (ctx.templateHtml) {
+    return renderWithTemplate(ctx.templateHtml, {
+      title,
+      content,
+      basePath: ctx.basePath || "",
+    });
+  }
+  return generateHTML({
+    title,
+    content,
+    currentPath,
+    navItems: ctx.navItems,
+    basePath: ctx.basePath || "",
+  });
 }
 
 /**
@@ -111,12 +134,10 @@ async function processMarkdownFile(filePath, ctx) {
   // 修复导航栏激活状态：计算相对于站点根目录的路径（基于源文件位置）
   const normalizedPath = relativePagePath(filePath, cwd);
 
-  const fullHTML = generateHTML({
+  const fullHTML = renderPage(ctx, {
     title,
     content: finalContent,
     currentPath: normalizedPath,
-    navItems,
-    basePath,
   });
   await fs.outputFile(outputPath, fullHTML);
   console.log(`生成成功: ${outputPath}`);
@@ -173,12 +194,10 @@ async function generateIndexPage(folder, articles, allArticles, ctx) {
       );
 
       const outputPath = path.join(ctx.outputDir || cwd, folder, "index.html");
-      const html = generateHTML({
+      const html = renderPage(ctx, {
         title: navItem.name,
         content,
         currentPath: "/",
-        navItems,
-        basePath,
       });
 
       await fs.outputFile(outputPath, html);
@@ -193,12 +212,10 @@ async function generateIndexPage(folder, articles, allArticles, ctx) {
     const content = buildIndexContent(articles, navItem);
 
     const outputPath = path.join(ctx.outputDir || cwd, folder, "index.html");
-    const html = generateHTML({
+    const html = renderPage(ctx, {
       title: navItem.name,
       content,
       currentPath: `/${folder}/`,
-      navItems,
-      basePath,
     });
 
     await fs.outputFile(outputPath, html);
@@ -253,12 +270,23 @@ async function renderAll(options = {}) {
     const engineConfig = options.engineConfig || {};
     // 站点部署前缀（如 "/blog"），作用于导航链接与静态资源路径
     const basePath = config.basePath || "";
+    // 外部页面模板：若配置了 templateFile，渲染器只提供内容，外壳由该模板决定
+    let templateHtml = null;
+    if (config.templateFile) {
+      const templatePath = path.resolve(cwd, config.templateFile);
+      if (await fs.pathExists(templatePath)) {
+        templateHtml = await fs.readFile(templatePath, "utf8");
+        console.log(`使用外部页面模板: ${templatePath}`);
+      } else {
+        console.warn(`templateFile 不存在，回退内置模板: ${templatePath}`);
+      }
+    }
 
     // 复制静态资源
     await copyStaticAssets(cwd, outputDir);
 
     const allArticles = [];
-    const ctx = { cwd, outputDir, navItems, config, engineConfig, basePath };
+    const ctx = { cwd, outputDir, navItems, config, engineConfig, basePath, templateHtml };
 
     // 第一步：收集所有文章信息
     for (const navItem of navItems) {
@@ -317,4 +345,5 @@ module.exports = {
   generateIndexPage,
   copyStaticAssets,
   relativePagePath,
+  renderPage,
 };

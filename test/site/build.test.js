@@ -537,4 +537,91 @@ navigation:
     // 静态资源前缀 /blog/static
     expect(articleHtml).toContain('href="/blog/static/css/katex.min.css"');
   });
+
+  it("renderAll 支持 templateFile 外部模板（渲染器只提供内容）", async () => {
+    await fs.writeFile(
+      path.join(siteRoot, "config.yml"),
+      `site:
+  title: 外部模板博客
+basePath: /blog
+templateFile: custom-template.html
+navigation:
+  - name: 首页
+    path: /
+    folder: home
+    isHome: true
+  - name: 技术文章
+    path: /articles/
+    folder: articles
+`
+    );
+    await fs.writeFile(
+      path.join(siteRoot, "custom-template.html"),
+      `<!DOCTYPE html><html><head><title>{{TITLE}}</title></head>
+<body><aside>侧栏</aside><main>{{CONTENT}}</main><footer>{{BASE_PATH}}</footer></body></html>`
+    );
+    const articles = await renderAll({ cwd: siteRoot });
+    expect(articles.some((a) => a.slug === "poisson")).toBe(true);
+
+    // 文章页用外部模板：无内置导航/主题按钮，内容由模板包裹
+    const articleHtml = await fs.readFile(
+      path.join(articlesDir, "poisson", "index.html"),
+      "utf8"
+    );
+    expect(articleHtml).toContain("<aside>侧栏</aside>");
+    expect(articleHtml).toContain("<footer>/blog</footer>");
+    expect(articleHtml).not.toContain("toggleTheme");
+    expect(articleHtml).not.toContain("nav-menu");
+    expect(articleHtml).toContain("泊松重建"); // 内容来自渲染器
+    // 占位符全部替换
+    expect(articleHtml).not.toContain("{{TITLE}}");
+    expect(articleHtml).not.toContain("{{CONTENT}}");
+
+    // 索引页同样走外部模板
+    const indexHtml = await fs.readFile(
+      path.join(articlesDir, "index.html"),
+      "utf8"
+    );
+    expect(indexHtml).toContain("<aside>侧栏</aside>");
+    expect(indexHtml).not.toContain("{{CONTENT}}");
+  });
+
+  it("renderAll templateFile 不存在时回退内置模板", async () => {
+    await fs.writeFile(
+      path.join(siteRoot, "config.yml"),
+      `site:
+  title: 回退测试
+templateFile: missing-template.html
+navigation:
+  - name: 首页
+    path: /
+    folder: home
+    isHome: true
+  - name: 技术文章
+    path: /articles/
+    folder: articles
+`
+    );
+    const articles = await renderAll({ cwd: siteRoot });
+    expect(articles.some((a) => a.slug === "poisson")).toBe(true);
+    const articleHtml = await fs.readFile(
+      path.join(articlesDir, "poisson", "index.html"),
+      "utf8"
+    );
+    // 回退内置模板：含导航与主题切换
+    expect(articleHtml).toContain("toggleTheme");
+    expect(articleHtml).toContain("nav-menu");
+  });
+
+  it("renderPage 直接调用：外部模板 + 空 basePath 兜底", async () => {
+    // 不经过 renderAll，直接测 renderPage 函数（覆盖 ctx.basePath 为空字符串分支）
+    const { renderPage } = await import("../../src/site/build.js");
+    const tpl = "<main>{{CONTENT}}</main><i>{{BASE_PATH}}</i>";
+    const html = renderPage(
+      { templateHtml: tpl, basePath: "", navItems: [] },
+      { title: "t", content: "<p>x</p>", currentPath: "/" }
+    );
+    expect(html).toContain("<p>x</p>");
+    expect(html).toContain("<i></i>"); // 空 basePath → 空字符串
+  });
 });
