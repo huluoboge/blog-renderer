@@ -499,7 +499,9 @@ navigation:
   it("renderAll 中配置缺失 navigation 时用默认", async () => {
     await fs.writeFile(path.join(siteRoot, "config.yml"), "site:\n  title: 无导航\n");
     const articles = await renderAll({ cwd: siteRoot });
-    expect(articles.length).toBe(0); // 无 navigation → navItems 空 → 无文章收集
+    // 无 navigation → 不生成导航页，但默认 articleDirs=["articles"] 仍收集文章
+    expect(articles.length).toBeGreaterThan(0);
+    expect(articles.some((a) => a.slug === "poisson")).toBe(true);
   });
 
   it("renderAll 顶层错误抛出", async () => {
@@ -623,5 +625,46 @@ navigation:
     );
     expect(html).toContain("<p>x</p>");
     expect(html).toContain("<i></i>"); // 空 basePath → 空字符串
+  });
+
+  it("无分类导航时文章页返回博客首页", async () => {
+    // 导航只有 home（博客首页即列表），articles 文章应返回博客首页
+    await fs.writeFile(
+      path.join(siteRoot, "config.yml"),
+      `site:
+  title: 单页博客
+navigation:
+  - name: 博客
+    path: /
+    folder: home
+    isHome: true
+`
+    );
+    const articles = await renderAll({ cwd: siteRoot });
+    expect(articles.some((a) => a.slug === "poisson")).toBe(true);
+    const articleHtml = await fs.readFile(
+      path.join(articlesDir, "poisson", "index.html"),
+      "utf8"
+    );
+    // 返回博客首页（文章 /blog/articles/poisson/ → ../../index.html）
+    expect(articleHtml).toContain('href="../../index.html"');
+    expect(articleHtml).toContain("返回博客首页");
+    // 不应再有分类返回按钮
+    expect(articleHtml).not.toContain("返回技术文章");
+  });
+
+  it("processMarkdownFile 站点根级文件不加返回按钮", async () => {
+    // 文件直接位于站点根（无子目录）→ 不加返回按钮链接
+    const rootMd = path.join(siteRoot, "root-page.md");
+    await fs.writeFile(rootMd, "# 根级页面\n");
+    const meta = await processMarkdownFile(rootMd, ctx);
+    expect(meta.title).toBe("root-page");
+    const html = await fs.readFile(
+      path.join(siteRoot, "root-page.html"),
+      "utf8"
+    );
+    // 无返回按钮链接（<a class="back-button">）；CSS 选择器存在不算
+    expect(html).not.toMatch(/<a[^>]*class="back-button"/);
+    expect(html).not.toContain("← 返回");
   });
 });

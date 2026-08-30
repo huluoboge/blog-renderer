@@ -107,23 +107,32 @@ async function processMarkdownFile(filePath, ctx) {
   });
   htmlContent = htmlContent.replace(/""/g, '"');
 
-  // 返回按钮（文章页面显示返回分类列表的链接）
+  // 返回按钮（文章页面显示返回链接：分类列表存在则返回分类，否则返回博客首页）
   const folderName = path.dirname(filePath).split(path.sep).pop();
   const parentFolder = path
     .dirname(filePath)
     .split(path.sep)
     .slice(-2, -1)[0];
-  const isArticlePage =
-    folderName !== "." &&
-    navItems.some((item) => item.folder === parentFolder) &&
-    !navItems.find((item) => item.folder === parentFolder)?.isHome;
+  const parentNavItem = navItems.find(
+    (item) => item.folder === parentFolder && !item.isHome
+  );
+  const isArticlePage = folderName !== "." && Boolean(parentNavItem);
+  const isRootLevel = path.dirname(filePath) === cwd;
 
   let finalContent = htmlContent;
   if (isArticlePage) {
     const backButton = `<a href="../index.html" class="back-button">← 返回${
-      navItems.find((item) => item.folder === parentFolder).name
+      parentNavItem.name
     }</a>`;
     finalContent = backButton + htmlContent;
+  } else if (folderName !== "." && !isRootLevel) {
+    // 无分类导航时，返回博客首页（文章位于 /blog/<folder>/<slug>/，向上两级）
+    const backButton = `<a href="../../index.html" class="back-button">← 返回博客首页</a>`;
+    finalContent = backButton + htmlContent;
+  } else {
+    // 站点根级文件（folderName 为 "." 或直接位于站点根），不加返回按钮
+    /* istanbul ignore next */
+    finalContent = htmlContent;
   }
 
   const outputPath = path.join(
@@ -288,12 +297,17 @@ async function renderAll(options = {}) {
     const allArticles = [];
     const ctx = { cwd, outputDir, navItems, config, engineConfig, basePath, templateHtml };
 
-    // 第一步：收集所有文章信息
-    for (const navItem of navItems) {
-      const folderPath = path.join(cwd, navItem.folder);
+    // 第一步：收集所有文章信息。
+    // 扫描目录 = 导航 folder 集合 + config.articleDirs（默认 ["articles"]，支持未在导航中的文章目录）
+    const navFolders = navItems.map((item) => item.folder);
+    const extraDirs = config.articleDirs || ["articles"];
+    const scanFolders = [...new Set([...navFolders, ...extraDirs])];
+
+    for (const folder of scanFolders) {
+      const folderPath = path.join(cwd, folder);
       const discovered = await discoverArticles(folderPath);
       console.log(
-        `收集文件夹 ${navItem.folder}: 找到 ${discovered.length} 篇文章`
+        `收集文件夹 ${folder}: 找到 ${discovered.length} 篇文章`
       );
 
       for (const articleInfo of discovered) {
@@ -304,7 +318,7 @@ async function renderAll(options = {}) {
             ...meta,
             slug: articleInfo.slug,
             file: "index.md",
-            folder: navItem.folder,
+            folder,
             articlePath: articleInfo.path,
             articleFolder: articleInfo.folder,
           });
