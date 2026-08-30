@@ -118,19 +118,21 @@ async function processMarkdownFile(filePath, ctx) {
   );
   const isArticlePage = folderName !== "." && Boolean(parentNavItem);
   const isRootLevel = path.dirname(filePath) === cwd;
+  // 首页源文件（<home>/home/index.md）是主页内容，不加返回按钮
+  const isHomeSource = parentFolder === "home" && folderName === "home";
 
   let finalContent = htmlContent;
-  if (isArticlePage) {
+  if (isArticlePage && !isHomeSource) {
     const backButton = `<a href="../index.html" class="back-button">← 返回${
       parentNavItem.name
     }</a>`;
     finalContent = backButton + htmlContent;
-  } else if (folderName !== "." && !isRootLevel) {
+  } else if (folderName !== "." && !isRootLevel && !isHomeSource) {
     // 无分类导航时，返回博客首页（文章位于 /blog/<folder>/<slug>/，向上两级）
     const backButton = `<a href="../../index.html" class="back-button">← 返回博客首页</a>`;
     finalContent = backButton + htmlContent;
   } else {
-    // 站点根级文件（folderName 为 "." 或直接位于站点根），不加返回按钮
+    // 站点根级文件或首页源文件，不加返回按钮
     /* istanbul ignore next */
     finalContent = htmlContent;
   }
