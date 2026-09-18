@@ -4,6 +4,10 @@ import { extractMainContent,
   buildAllArticlesHTML,
   buildProjectsHTML,
   buildHomepageContent,
+  buildArticleDiscoveryHTML,
+  buildCategoryDefinitions,
+  buildCategoryOverviewHTML,
+  buildCategoryIndexContent,
   buildIndexContent,
   formatDate, } from "../../src/site/index-pages.js";
 
@@ -278,6 +282,61 @@ describe("index-pages", () => {
       expect(html).toContain("无日期文章"); // 不截断
       expect(html).not.toContain("all-articles-placeholder");
       expect(html).not.toContain("项目A"); // 排除非 articles
+    });
+  });
+
+  describe("分类与文章检索", () => {
+    const categorizedArticles = [
+      {
+        title: "ESKF 入门",
+        date: "2024-01-02",
+        folder: "articles",
+        slug: "eskf",
+        categories: ["state-estimation"],
+        tags: ["IMU"],
+        excerpt: "误差状态滤波简介",
+      },
+      {
+        title: "Poisson 重建",
+        date: "2024-01-01",
+        folder: "articles",
+        slug: "poisson",
+        categories: ["reconstruction"],
+      },
+    ];
+
+    it("合并配置分类与文章分类", () => {
+      const categories = buildCategoryDefinitions(categorizedArticles, [
+        { slug: "state-estimation", name: "SLAM / 状态估计" },
+      ]);
+      expect(categories.map((category) => category.slug)).toEqual([
+        "state-estimation",
+        "reconstruction",
+      ]);
+      expect(categories[0].name).toBe("SLAM / 状态估计");
+    });
+
+    it("生成分类卡片与文章检索控件", () => {
+      const categories = buildCategoryDefinitions(categorizedArticles);
+      const overview = buildCategoryOverviewHTML(categorizedArticles, categories, {
+        linkPrefix: "categories/",
+      });
+      const discovery = buildArticleDiscoveryHTML(categorizedArticles, categories);
+      expect(overview).toContain('href="categories/state-estimation/index.html"');
+      expect(overview).toContain("SLAM / 状态估计");
+      expect(discovery).toContain('data-article-search');
+      expect(discovery).toContain('data-article-category');
+      expect(discovery).toContain("ESKF 入门");
+      expect(discovery).toContain("状态估计");
+    });
+
+    it("分类详情页链接回分类目录并指向原文章路径", () => {
+      const html = buildCategoryIndexContent(
+        { slug: "state-estimation", name: "SLAM / 状态估计" },
+        [categorizedArticles[0]]
+      );
+      expect(html).toContain('href="../index.html"');
+      expect(html).toContain('href="../../articles/eskf/index.html"');
     });
   });
 

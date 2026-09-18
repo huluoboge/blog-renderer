@@ -19,6 +19,11 @@ const {
   extractMainContent,
   buildHomepageContent,
   buildIndexContent,
+  buildCategoryDefinitions,
+  buildCategoryOverviewHTML,
+  buildCategoryIndexContent,
+  getArticleCategories,
+  slugifyCategory,
 } = require("./index-pages");
 
 /**
@@ -157,6 +162,7 @@ async function processMarkdownFile(filePath, ctx) {
     title,
     date: attributes.date,
     tags: attributes.tags,
+    categories: attributes.categories ?? attributes.category,
     excerpt: attributes.excerpt,
     image: attributes.image,
   };
@@ -203,7 +209,8 @@ async function generateIndexPage(folder, articles, allArticles, ctx) {
       const content = buildHomepageContent(
         updated,
         allArticles,
-        config.homepage || {}
+        config.homepage || {},
+        buildCategoryDefinitions(allArticles, config.categories || [])
       );
 
       const outputPath = path.join(ctx.outputDir || cwd, folder, "index.html");
@@ -233,6 +240,68 @@ async function generateIndexPage(folder, articles, allArticles, ctx) {
 
     await fs.outputFile(outputPath, html);
     console.log(`生成索引: ${outputPath}`);
+  }
+}
+
+/**
+ * 生成分类总览页与分类详情页。
+ * 文章路径保持在 articles/<slug>/，分类页单独放在 categories/<category>/。
+ */
+async function generateCategoryPages(allArticles, ctx) {
+  const { outputDir, config } = ctx;
+  const articles = allArticles.filter((article) => article.folder === "articles");
+  const categories = buildCategoryDefinitions(
+    articles,
+    config.categories || []
+  ).filter((category) =>
+    articles.some((article) => {
+      const rawCategories = getArticleCategories(article);
+      const articleCategories =
+        rawCategories.length > 0 ? rawCategories : ["uncategorized"];
+      return articleCategories.map(slugifyCategory).includes(category.slug);
+    })
+  );
+
+  if (categories.length === 0) return;
+
+  const categoriesDir = path.join(outputDir, "categories");
+  await fs.ensureDir(categoriesDir);
+
+  const overviewContent = `
+    <h1>文章分类</h1>
+    <p class="category-description">按主题浏览文章，具体文章仍保留原有链接地址。</p>
+    ${buildCategoryOverviewHTML(articles, categories, { linkPrefix: "" })}
+  `;
+  await fs.outputFile(
+    path.join(categoriesDir, "index.html"),
+    renderPage(ctx, {
+      title: "文章分类",
+      content: overviewContent,
+      currentPath: "/categories/",
+    })
+  );
+
+  for (const category of categories) {
+    const categoryArticles = articles.filter((article) => {
+      const articleCategories = getArticleCategories(article);
+      const normalized =
+        articleCategories.length > 0
+          ? articleCategories
+          : ["uncategorized"];
+      return normalized.map(slugifyCategory).includes(category.slug);
+    });
+    if (categoryArticles.length === 0) continue;
+
+    const categoryDir = path.join(categoriesDir, category.slug);
+    await fs.ensureDir(categoryDir);
+    await fs.outputFile(
+      path.join(categoryDir, "index.html"),
+      renderPage(ctx, {
+        title: category.name,
+        content: buildCategoryIndexContent(category, categoryArticles),
+        currentPath: `/categories/${category.slug}/`,
+      })
+    );
   }
 }
 
@@ -330,6 +399,9 @@ async function renderAll(options = {}) {
 
     console.log("所有文章收集完成，共", allArticles.length, "篇文章");
 
+    // 分类页独立生成，不改变文章原有 URL 和目录结构。
+    await generateCategoryPages(allArticles, ctx);
+
     // 第二步：生成所有页面
     for (const navItem of navItems) {
       const folderPath = navItem.folder;
@@ -358,6 +430,7 @@ module.exports = {
   renderAll,
   processMarkdownFile,
   generateIndexPage,
+  generateCategoryPages,
   copyStaticAssets,
   relativePagePath,
   renderPage,
