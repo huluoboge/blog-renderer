@@ -8,6 +8,7 @@ module.exports = {
   ...require("./config"),
   ...require("./nav"),
   ...require("./template"),
+  ...require("./client-assets"),
   ...require("./discover"),
   ...require("./index-pages"),
   ...require("./build"),

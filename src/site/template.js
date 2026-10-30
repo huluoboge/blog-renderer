@@ -11,6 +11,7 @@
  */
 
 const { THEME_CSS } = require("./theme");
+const { buildOnDemandLoaderScript } = require("./client-assets");
 
 /** HTML 转义（用于 title 等文本插入，防 XSS） */
 function escapeHtml(str) {
@@ -65,6 +66,7 @@ function generateHTML({
   const navHtml = generateNav(navItems, currentPath, basePath);
   const effectiveStaticPrefix =
     staticPrefix || (basePath ? `${basePath}/static` : "/static");
+  const assetLoader = buildOnDemandLoaderScript(effectiveStaticPrefix);
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -72,33 +74,17 @@ function generateHTML({
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeHtml(title)}</title>
     <link rel="stylesheet" href="${effectiveStaticPrefix}/css/highlight.min.css">
-    <script src="${effectiveStaticPrefix}/js/mermaid.min.js"></script>
-    <script src="${effectiveStaticPrefix}/js/highlight.min.js"></script>
     <link rel="stylesheet" href="${effectiveStaticPrefix}/css/katex.min.css">
     <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        // 代码高亮
-        document.querySelectorAll('pre code').forEach(function(block) {
-          if (window.hljs) hljs.highlightElement(block);
-        });
-        // Mermaid 图表
-        if (window.mermaid && document.querySelector('.mermaid')) {
-          mermaid.initialize({ startOnLoad: true });
-          mermaid.run();
-        }
-      });
-      // 主题切换
       function toggleTheme() {
         var html = document.documentElement;
         var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
         html.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
       }
-      // 移动端菜单
       function toggleMenu() {
         document.querySelector('.nav-menu').classList.toggle('active');
       }
-      // 恢复上次主题
       (function() {
         var saved = localStorage.getItem('theme');
         if (saved) document.documentElement.setAttribute('data-theme', saved);
@@ -121,6 +107,7 @@ function generateHTML({
       ${content}
     </main>
   </div>
+  ${assetLoader}
 </body>
 </html>`;
 }

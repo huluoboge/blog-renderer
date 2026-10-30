@@ -13,6 +13,7 @@ const frontMatter = require("front-matter");
 const renderer = require("../core/renderer");
 const { processLinksAndEmbeds } = require("../core/links");
 const { generateHTML, renderWithTemplate } = require("./template");
+const { ensureLazyClientAssets } = require("./client-assets");
 const { loadConfig } = require("./config");
 const { discoverArticles } = require("./discover");
 const {
@@ -45,20 +46,27 @@ function relativePagePath(outputPath, cwd) {
  * @param {object} vars { title, content, currentPath }
  */
 function renderPage(ctx, { title, content, currentPath }) {
+  const basePath = ctx.basePath || "";
+  let html;
   if (ctx.templateHtml) {
-    return renderWithTemplate(ctx.templateHtml, {
+    html = renderWithTemplate(ctx.templateHtml, {
       title,
       content,
-      basePath: ctx.basePath || "",
+      basePath,
+    });
+  } else {
+    html = generateHTML({
+      title,
+      content,
+      currentPath,
+      navItems: ctx.navItems,
+      basePath,
     });
   }
-  return generateHTML({
-    title,
-    content,
-    currentPath,
-    navItems: ctx.navItems,
-    basePath: ctx.basePath || "",
-  });
+  // 兜底：无论外部模板是否仍写死同步 <script src=mermaid>，
+  // 构建结果都改为「有 .mermaid / pre code 才动态下载」。
+  const staticPrefix = basePath ? `${basePath}/static` : "/static";
+  return ensureLazyClientAssets(html, { staticPrefix });
 }
 
 /**
